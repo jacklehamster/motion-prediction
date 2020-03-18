@@ -1,0 +1,178 @@
+<html>
+	<body>
+		<div style="margin: 10px">
+			<label for="fps">Framerate of input:</label><input id="fps" type="number" value="2">
+			<input id="knob" min="1" max="60" value="2" type="range">
+			<select id="interpole">
+				<option value="none">none</option>
+				<option value="linear">linear</option>
+				<option value="decelerate">decelerate</option>
+				<option value="prediction">prediction</option>
+			</select>
+		</div>
+
+		<canvas id="canvas" width=1600 height=1200 style="width: 800px; height: 600px; border: 1px solid black">
+		</canvas>
+
+
+		<script>
+
+			function getPrediction(history) {
+				const diff = new Array(history.length);
+				diff[history.length-1] = 0;
+				for (let i = history.length - 2; i >= 0; i--) {
+					diff[i] = history[i] - history[i+1];
+				}
+
+				const acc = new Array(diff.length);
+				acc[diff.length-1] = 0;
+				for (let i = diff.length - 2; i >= 0; i--) {
+					acc[i] = diff[i] - diff[i+1];
+				}
+
+				return [ history[0], diff[0], acc[0] ];
+
+				// let p = 0, d = 0, a = 0;
+				// for (let i = 0; i < history.length; i++) {
+				// 	p += history[i] / (1<<(i+1));
+				// 	d += diff[i] / (1<<(i+1));
+				// 	a += acc[i] / (1<<(i+1));
+				// }
+				// return [ p, d, a ];
+			}
+
+			const canvas = document.getElementById("canvas");
+			const ctx = canvas.getContext("2d");
+			const fps = document.getElementById("fps");
+			const knob = document.getElementById("knob");
+			const interpole = document.getElementById("interpole");
+
+			if (localStorage.getItem("settings")) {
+				const settings = JSON.parse(localStorage.getItem("settings"));
+				fps.value = settings.fps;
+				knob.value = fps.value;
+				interpole.value = settings.interpole;
+			}
+
+			fps.addEventListener("change", e => {
+				localStorage.setItem("settings", JSON.stringify({
+					fps: fps.value,
+					interpole: interpole.value,
+				}));
+			});
+			interpole.addEventListener("change", e => {
+				localStorage.setItem("settings", JSON.stringify({
+					fps: fps.value,
+					interpole: interpole.value,
+				}));
+			});
+
+
+			knob.addEventListener("input", e => {
+				fps.value = knob.value;
+				localStorage.setItem("settings", JSON.stringify({
+					fps: fps.value,
+					interpole: interpole.value,
+				}));
+			});
+
+			let posX = 0, posY = 0;
+			document.addEventListener("mousemove", e => {
+				const x = e.pageX - canvas.offsetLeft;
+				const y = e.pageY - canvas.offsetTop;
+				posX = x;
+				posY = y;
+			});
+
+			let histX = new Array(10).fill(0);
+			let histY = new Array(10).fill(0);
+
+			const tailX = new Array(10).fill(0);
+			const tailY = new Array(10).fill(0);
+
+
+			let cursorX = 0, cursorY = 0;
+			let lastRefresh = 0;
+			let dotX = 0, dotY = 0;
+			function loop(now) {
+				const period = 1000 / parseInt(fps.value);
+
+				if (now - lastRefresh > period) {
+					for (let i = 9; i > 0; i--) {
+						histX[i] = histX[i-1];
+						histY[i] = histY[i-1];
+					}
+					histX[0] = posX;
+					histY[0] = posY;
+					cursorX = posX;
+					cursorY = posY;
+					lastRefresh = now;
+				}
+
+
+				switch(interpole.value) {
+					case "none":
+						{
+							dotX = cursorX;
+							dotY = cursorY;
+							break;
+						}
+					case "linear":
+						{
+							const speed = 30;
+							const dx = cursorX - dotX;
+							const dy = cursorY - dotY;
+							const dist = Math.sqrt(dx*dx + dy*dy);
+							if (dist) {
+								dotX += (dx / dist) * Math.min(dist, speed);
+								dotY += (dy / dist) * Math.min(dist, speed);
+							}
+							break;
+						}
+					case "decelerate":
+						{
+							const dx = cursorX - dotX;
+							const dy = cursorY - dotY;
+							dotX += dx/5;
+							dotY += dy/5;
+							break;
+						}
+					case "prediction":
+						{
+							const [ px, dx, ax ] = getPrediction(histX);
+							const [ py, dy, ay ] = getPrediction(histY);
+							const t = (now - lastRefresh) / 800;
+							const goalX = (px + t * dx + 1/2 * t * t * ax);
+							const goalY = (py + t * dy + 1/2 * t * t * ay);
+							dotX += (goalX - dotX) / 8;
+							dotY += (goalY - dotY) / 8;
+							break;
+						}
+				}
+
+				for (let i = 9; i > 0; i--) {
+					tailX[i] = tailX[i-1];
+					tailY[i] = tailY[i-1];
+				}
+				tailX[0] = dotX;
+				tailY[0] = dotY
+
+				ctx.clearRect(0, 0, canvas.width, canvas.height);
+				ctx.fillStyle = "#000000";
+				for (let i = 0; i < 10; i++) {
+					ctx.beginPath();
+					ctx.arc(tailX[i] * 2, tailY[i] * 2, 20 / (i+1), 0, 2 * Math.PI);
+					ctx.fill();
+				}
+
+				requestAnimationFrame(loop);
+			}
+
+			requestAnimationFrame(loop);
+
+
+		</script>
+
+
+	</body>
+</html>
