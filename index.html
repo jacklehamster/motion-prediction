@@ -2,12 +2,12 @@
 	<body>
 		<div style="margin: 10px">
 			<label for="fps">Framerate of input:</label><input id="fps" type="number" value="2">
-			<input id="knob" min="1" max="60" value="2" type="range">
+			<input id="knob" min="1" max="60" value="5" type="range">
 			<select id="interpole">
+				<option value="prediction">prediction</option>
 				<option value="none">none</option>
 				<option value="linear">linear</option>
 				<option value="decelerate">decelerate</option>
-				<option value="prediction">prediction</option>
 			</select>
 		</div>
 
